@@ -2,7 +2,6 @@ use serde::{Serialize,Deserialize};
 use ring::signature::{self, Ed25519KeyPair, UnparsedPublicKey, Signature, KeyPair, VerificationAlgorithm, EdDSAParameters};
 use rand::Rng;
 use super::address::Address;
-// crate::types::address::Address;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Transaction {
