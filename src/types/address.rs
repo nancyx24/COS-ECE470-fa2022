@@ -1,4 +1,6 @@
 use serde::{Serialize, Deserialize};
+use ring::digest;
+use std::convert::TryInto;
 
 // 20-byte address
 #[derive(Eq, PartialEq, Serialize, Deserialize, Clone, Hash, Default, Copy)]
@@ -48,7 +50,20 @@ impl std::fmt::Debug for Address {
 
 impl Address {
     pub fn from_public_key_bytes(bytes: &[u8]) -> Address {
-        unimplemented!()
+        // MY CODE
+
+        // creates hash with SHA256 and turns to vector
+        let mut hash = digest::digest(&digest::SHA256, bytes).as_ref().to_vec();
+        
+        // length of hash WHAT IF LESS THAN 20?
+        let length = hash.len();
+
+        // last 20 digits of hash (as vec)
+        let hash_20 = hash.split_off(length - 20);
+        
+        // output
+        // last 20 digits of hash (as array)
+        Address(hash_20[..].try_into().unwrap())
     }
 }
 // DO NOT CHANGE THIS COMMENT, IT IS FOR AUTOGRADER. BEFORE TEST
