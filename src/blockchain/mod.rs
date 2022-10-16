@@ -3,6 +3,7 @@ use crate::types::hash::Hashable;
 use std::collections::HashMap;
 use super::types::block::{self, Block, Header, Content};
 use super::types::transaction;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct Blockchain {
     block_hash: HashMap<H256, Block>, // key = hash, value = block
@@ -20,8 +21,8 @@ impl Blockchain {
         let nonce: u32 = rand::random();
         let zeros: [u8; 32] = [0; 32];
         let parent: H256 = H256::from(zeros);
-        let difficulty: H256 = H256::from(zeros);
-        let timestamp = 0;
+        let difficulty: H256 = [255u8;32].into();
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
         let content_data: Vec<transaction::SignedTransaction> = Vec::new();
         let data: Content = block::build_content(content_data);
 
@@ -64,7 +65,7 @@ impl Blockchain {
         self.length_hash.insert(block_hash, block_length);
         
         // update longest_length and tip if necessary
-        if (block_length > self.longest_length) {
+        if block_length > self.longest_length {
             self.longest_length = block_length;
             self.tip = block_hash;
         }
@@ -103,6 +104,11 @@ impl Blockchain {
 
         output
         // vec![]
+    }
+
+    // get block_hash
+    pub fn get_parent_block(&self, parent: H256) -> Block {
+        self.block_hash.get(&parent).unwrap().clone()
     }
 }
 
