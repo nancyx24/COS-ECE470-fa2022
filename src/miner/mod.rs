@@ -44,12 +44,9 @@ pub struct Handle {
     control_chan: Sender<ControlSignal>,
 }
 
-pub fn new() -> (Context, Handle, Receiver<Block>) {
+pub fn new(blockchain: Arc<Mutex<Blockchain>>) -> (Context, Handle, Receiver<Block>) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
     let (finished_block_sender, finished_block_receiver) = unbounded();
-
-    let blockchain_unprotected = Blockchain::new();
-    let blockchain = Arc::new(Mutex::new(blockchain_unprotected));
 
     let clone_context = Arc::clone(&blockchain);
 
@@ -69,7 +66,8 @@ pub fn new() -> (Context, Handle, Receiver<Block>) {
 
 #[cfg(any(test,test_utilities))]
 fn test_new() -> (Context, Handle, Receiver<Block>) {
-    new()
+    let blockchain = Arc::new(Mutex::new(Blockchain::new()));
+    new(blockchain)
 }
 
 impl Handle {
