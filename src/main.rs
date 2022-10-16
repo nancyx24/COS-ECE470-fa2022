@@ -35,8 +35,7 @@ fn main() {
     // init logger
     let verbosity = matches.occurrences_of("verbose") as usize;
     stderrlog::new().verbosity(verbosity).init().unwrap();
-    let blockchain = Blockchain::new();
-    let blockchain = Arc::new(Mutex::new(blockchain));
+    let blockchain = Arc::new(Mutex::new(Blockchain::new()));
     // parse p2p server address
     let p2p_addr = matches
         .value_of("peer_addr")
@@ -82,7 +81,7 @@ fn main() {
 
     // start the miner
     let (miner_ctx, miner, finished_block_chan) = miner::new();
-    let miner_worker_ctx = miner::worker::Worker::new(&server, finished_block_chan);
+    let miner_worker_ctx = miner::worker::Worker::new(&server, finished_block_chan, blockchain.clone());
     miner_ctx.start();
     miner_worker_ctx.start();
 
