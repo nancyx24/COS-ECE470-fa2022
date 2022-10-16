@@ -1,7 +1,11 @@
 use serde::{Serialize,Deserialize};
 use ring::signature::{self, Ed25519KeyPair, UnparsedPublicKey, Signature, KeyPair, VerificationAlgorithm, EdDSAParameters};
 use rand::Rng;
+use ring::digest;
+use std::convert::TryInto;
 use super::address::Address;
+use crate::types::hash::H256;
+use crate::types::hash::Hashable;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Transaction {
@@ -19,6 +23,22 @@ pub struct SignedTransaction {
     t: Transaction,
     sig: Vec<u8>,
     public_key: Vec<u8>,
+}
+
+impl Hashable for SignedTransaction {
+    fn hash(&self) -> H256 {
+        // MY CODE
+        // Miraculously compiled?
+
+        // serialize transaction as slice of bytes
+        let serialized = serde_json::to_string(&self).unwrap(); // &[u8]
+        digest::digest(&digest::SHA256, serialized.as_ref()).into()
+
+        // let serialized = serde_json::to_string(&self.t).unwrap().as_ref();
+        // let hash: [u8] = digest::digest(&digest::SHA256, serialized).as_ref();
+        // let hash_array = hash.try_into().unwrap();
+        // H256::from(hash_array)
+    }
 }
 
 /// Create digital signature of a transaction
