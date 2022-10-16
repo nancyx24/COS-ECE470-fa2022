@@ -65,7 +65,10 @@ impl MerkleTree {
     pub fn root(&self) -> H256 {
         // last element from tree is root
         let length = self.tree.len();
-        let root = self.tree[length - 1];
+        let mut root = [0; 32]; // default if 0
+        if (length > 0) {
+            root = self.tree[length - 1];
+        }
         H256::from(root)
     }
 
