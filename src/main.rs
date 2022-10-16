@@ -80,7 +80,7 @@ fn main() {
     worker_ctx.start();
 
     // start the miner
-    let (miner_ctx, miner, finished_block_chan) = miner::new();
+    let (miner_ctx, miner, finished_block_chan) = miner::new(blockchain.clone());
     let miner_worker_ctx = miner::worker::Worker::new(&server, finished_block_chan, blockchain.clone());
     miner_ctx.start();
     miner_worker_ctx.start();
