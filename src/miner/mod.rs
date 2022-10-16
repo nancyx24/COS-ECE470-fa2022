@@ -103,7 +103,7 @@ impl Context {
     }
 
     fn miner_loop(&mut self) {
-        let mut parent = self.blockchain.lock().unwrap().tip();
+        let mut parent = self.blockchain.lock().unwrap().tip(); // MY CODE
 
         // main mining loop
         loop {
@@ -173,7 +173,7 @@ impl Context {
             let merkle_root = merkle_tree.root();
 
             // nonce, randomly generated
-            let nonce: u32 = rand::random();
+            let nonce = rand::random();
 
             // construct block
             let header = block::build_header(parent, nonce, difficulty, timestamp, merkle_root);
@@ -181,20 +181,23 @@ impl Context {
 
             // check if successful
             if new_block.hash() <= difficulty {
-                let cloned_new_block = new_block.clone();
-                thread::spawn(move || self.finished_block_chan.send(cloned_new_block).unwrap()); // send to finished block channel
+                self.finished_block_chan.send(new_block.clone()).expect("Send finished block error");
                 let mut blockchain = self.blockchain.lock().unwrap();
                 blockchain.insert(&new_block);
                 parent = self.blockchain.lock().unwrap().tip();
+                let zero_parent = H256::from([0; 32]);
+                if parent == zero_parent {
+                    break;
+                }
             }
 
-            // break if parent is genesis block
-            let zeros: [u8; 32] = [0; 32];
-            let zero_parent = H256::from(zeros);
-            if parent == zero_parent {
-                self.finished_block_chan.send(new_block.clone()).expect("Send finished block error");
-                break;
-            }
+            // // break if parent is genesis block
+            // let zeros: [u8; 32] = [0; 32];
+            // let zero_parent = H256::from(zeros);
+            // if parent == zero_parent {
+            //     self.finished_block_chan.send(new_block.clone()).expect("Send finished block error");
+            //     break;
+            // }
 
             // END OF MY CODE
 
