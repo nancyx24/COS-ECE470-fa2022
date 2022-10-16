@@ -43,30 +43,53 @@ impl Block {
     // return parent
     pub fn get_parent(&self) -> H256 {
         // MY CODE
-        self.header.parent
+        self.header.parent.clone()
     }
 
     // return difficulty
     pub fn get_difficulty(&self) -> H256 {
         // MY CODE
-        self.header.difficulty
+        self.header.difficulty.clone()
+    }
+
+    // MY CODE
+    // return content
+    pub fn get_content(&self) -> Vec<transaction::SignedTransaction> {
+        self.data.content_data.clone()
     }
 }
 
-#[cfg(any(test, test_utilities))]
 // MY CODE
-pub fn build_header(parent: H256, nonce: u32, difficulty: H256, timestamp: u128, merkle_root: H256) -> Header {
-    Header{ parent, nonce, difficulty, timestamp, merkle_root }
+
+impl Content {
+    // return content data
+    pub fn get_content_data(&self) -> Vec<transaction::SignedTransaction> {
+        self.content_data.clone()
+    }
 }
+
+// #[cfg(any(test, test_utilities))]
+
+// // MY CODE -- seems like the first function always doesn't work???
+// pub fn useless() -> () {
+//     println("Useless function")
+// }
+
+// MY CODE
 
 pub fn build_content(content_data: Vec<transaction::SignedTransaction>) -> Content {
     Content{ content_data }
 }
 
-pub fn build_block(header: Header, data: Content) -> Block {
-    Block{ header, data }
+pub fn build_header(parent: H256, nonce: u32, difficulty: H256, timestamp: u128, merkle_root: H256) -> Header {
+    Header{ parent, nonce, difficulty, timestamp, merkle_root }
 }
 
+pub fn build_block(header: Header, data: Content) -> Block {
+     Block{ header, data }
+}
+
+#[cfg(any(test, test_utilities))] // WHAT DOES THIS DO??
 pub fn generate_random_block(parent: &H256) -> Block {
     // MY CODE
     let parent = *parent;
