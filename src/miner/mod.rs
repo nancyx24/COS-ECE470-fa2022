@@ -42,7 +42,6 @@ pub struct Context {
 pub struct Handle {
     /// Channel for sending signal to the miner thread
     control_chan: Sender<ControlSignal>,
-    blockchain: Arc<Mutex<Blockchain>>,
 }
 
 pub fn new() -> (Context, Handle, Receiver<Block>) {
@@ -61,10 +60,8 @@ pub fn new() -> (Context, Handle, Receiver<Block>) {
         blockchain: clone_context,
     };
 
-    let clone_handle = Arc::clone(&blockchain);
     let handle = Handle {
         control_chan: signal_chan_sender,
-        blockchain: clone_handle,
     };
 
     (ctx, handle, finished_block_receiver)
