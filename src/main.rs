@@ -76,6 +76,7 @@ fn main() {
         p2p_workers,
         msg_rx,
         &server,
+        &blockchain.clone(),
     );
     worker_ctx.start();
 
