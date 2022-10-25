@@ -16,7 +16,6 @@ use crate::types::merkle::MerkleTree;
 use super::types::hash::{Hashable, H256};
 use std::convert::TryInto;
 use super::types::transaction;
-use hex_literal::hex;
 
 enum ControlSignal {
     Start(u64), // the number controls the lambda of interval between block generation
