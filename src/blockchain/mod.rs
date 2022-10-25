@@ -79,12 +79,16 @@ impl Blockchain {
 
     /// Get all blocks' hashes of the longest chain, ordered from genesis to the tip
     pub fn all_blocks_in_longest_chain(&self) -> Vec<H256> {
-        let mut count = self.tip;
+        let tip_hash = self.tip;
+        let block = self.block_hash[&tip_hash].clone();
+        let mut count = block.get_parent();
 
         // create vec to store hashes
         let mut output: Vec<H256> = Vec::new();
         
         let zeros: [u8; 32] = [0; 32];
+        output.push(tip_hash);
+
         while count != H256::from(zeros) {
             output.push(count);
             let block = &self.block_hash[&count];
@@ -106,9 +110,20 @@ impl Blockchain {
         // vec![]
     }
 
-    // get block_hash
+    // get parent_block
     pub fn get_parent_block(&self, parent: H256) -> Block {
         self.block_hash.get(&parent).unwrap().clone()
+    }
+
+    // check if block with certain hash present in hashmap
+    pub fn is_present(&self, hash: H256) -> bool {
+
+        let output = match self.block_hash.get(&hash) {
+            None => false,
+            _ => true,
+        };
+
+        output
     }
 }
 
