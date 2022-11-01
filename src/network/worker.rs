@@ -5,6 +5,7 @@ use crate::types::hash::{H256, Hashable};
 use std::sync::{Arc, Mutex};
 use crate::types::block::Block;
 use crate::blockchain::Blockchain;
+use std::collections::HashMap;
 
 use log::{debug, warn, error};
 
@@ -68,44 +69,87 @@ impl Worker {
                     debug!("Pong: {}", nonce);
                 }
                 Message::NewBlockHashes(nonce) => { // 
-                    let mut blocks_needed: Vec<H256> = Vec::new();
+                    // let mut blocks_needed: Vec<H256> = Vec::new();
 
                     // push blocks not in blockchain
                     for el in nonce {
-                        if !self.blockchain.lock().unwrap().is_present(el) {
+                        let mut blocks_needed: Vec<H256> = Vec::new();
+
+                        if !{self.blockchain.lock().unwrap().is_present(el)} {
                             blocks_needed.push(el);
                         }
-                    }
 
-                    // broadcast blocks needed
-                    peer.write(Message::GetBlocks(blocks_needed));
+                        peer.write(Message::GetBlocks(blocks_needed));
+
+                        // println!("inside message::newBlockHashes");
+                        // println!("{}", el.hash());
+                    }
                 }
                 Message::GetBlocks(nonce) => {
-                    let mut blocks_have: Vec<Block> = Vec::new();
-
                     // push blocks in blockchain
                     for el in nonce {
+                        let mut blocks_have: Vec<Block> = Vec::new();
+
                         if self.blockchain.lock().unwrap().is_present(el) {
                             blocks_have.push(self.blockchain.lock().unwrap().get_parent_block(el));
                         }
-                    }
+                        // println!("inside message::getBlocks");
+                        // println!("{}", el.hash());
 
-                    // reply with the have blocks
-                    peer.write(Message::Blocks(blocks_have));
+                        // reply with the have blocks
+                        peer.write(Message::Blocks(blocks_have));
+                    }
                 }
                 Message::Blocks(nonce) => {
-                    let mut new_blocks: Vec<H256> = Vec::new();
-                    for el in nonce {
-                        if !self.blockchain.lock().unwrap().is_present(el.hash()) {
-                            // insert into blockchain
-                            self.blockchain.lock().unwrap().insert(&el);
-                            // insert into vector of new blocks
-                            new_blocks.push(el.hash())
-                        }
-                    }
+                    // orphan buffer
+                    // key is parent of block, value is block
+                    let mut orphan_buffer: HashMap<H256, Block> = HashMap::new();
 
-                    // broadcast new blocks
-                    self.server.broadcast(Message::NewBlockHashes(new_blocks));
+                    for el in nonce {
+                        let mut new_blocks: Vec<H256> = Vec::new();
+
+                        if !{self.blockchain.lock().unwrap().is_present(el.hash())} {
+                            // PoW check
+                            if el.hash() <= el.get_difficulty() {
+                                // parent check
+                                if self.blockchain.lock().unwrap().is_present(el.get_parent()) {
+                                    // check difficulty in block header consistent with view
+                                    if el.get_difficulty() == self.blockchain.lock().unwrap().get_parent_block(el.get_parent()).get_difficulty() {
+                                        // insert into blockchain
+                                        {self.blockchain.lock().unwrap().insert(&el)};
+                                        // println!("inserted block -- network worker");
+                                        // println!("{}", el.hash());
+                                        // insert into vector of new blocks
+                                        new_blocks.push(el.hash());
+
+                                        // orphan block handler
+                                        let mut count = el.clone();
+                                        while orphan_buffer.contains_key(&count.hash()) {
+                                            // process orphan block
+                                            let orphan = orphan_buffer.get(&count.hash()).unwrap();
+                                            {self.blockchain.lock().unwrap().insert(&orphan)};
+                                            new_blocks.push(orphan.hash());
+
+                                            // update counter
+                                            count = orphan.clone();
+                                        }
+                                    } 
+                                }
+                                else {
+                                    // add block to orphan buffer
+                                    orphan_buffer.insert(el.get_parent(), el.clone());
+
+                                    // send getBlocks message with parent hash
+                                    let mut to_send: Vec<H256> = Vec::new();
+                                    to_send.push(el.clone().get_parent().hash());
+                                    peer.write(Message::GetBlocks(to_send));
+                                }
+                                
+                            }
+                        }
+                        // broadcast new blocks
+                        self.server.broadcast(Message::NewBlockHashes(new_blocks));
+                    }
                 } // all other cases
                 _ => unimplemented!(),
             }
