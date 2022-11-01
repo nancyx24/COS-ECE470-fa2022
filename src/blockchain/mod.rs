@@ -18,11 +18,11 @@ impl Blockchain {
         // MY CODE
 
         // create genesis block
-        let nonce: u32 = rand::random();
+        let nonce: u32 = 0;
         let zeros: [u8; 32] = [0; 32];
         let parent: H256 = H256::from(zeros);
-        let difficulty: H256 = [255u8;32].into();
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+        let difficulty: H256 = [100u8;32].into();
+        let timestamp = 0;
         let content_data: Vec<transaction::SignedTransaction> = Vec::new();
         let data: Content = block::build_content(content_data);
 
@@ -49,7 +49,6 @@ impl Blockchain {
 
     /// Insert a block into blockchain
     pub fn insert(&mut self, block: &Block) {
-        // MY CODE
 
         // insert block into block_hash
         
@@ -91,9 +90,7 @@ impl Blockchain {
 
         while count != H256::from(zeros) {
             output.push(count);
-            let block = &self.block_hash[&count];
-            let parent = block.clone().get_parent().hash();
-            count = parent;
+            count = self.block_hash[&count].clone().get_parent();
         }
  
         // reverse order of elements in vector
