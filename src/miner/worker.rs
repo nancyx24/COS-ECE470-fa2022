@@ -43,9 +43,10 @@ impl Worker {
             let _block = self.finished_block_chan.recv().expect("Receive finished block error");
             
             // TODO for student: insert this finished block to blockchain, and broadcast this block hash
-            let mut blockchain = self.blockchain.lock().unwrap();
-            blockchain.insert(&_block);
-            
+            self.blockchain.lock().unwrap().insert(&_block);
+            // println!("inserted block");
+            // println!("{}", _block.hash());
+
             // if successful, broadcast message NewBlockHashes
             let mut message: Vec<H256> = Vec::new();
             message.push(_block.hash());
