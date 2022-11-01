@@ -97,8 +97,10 @@ impl Context {
     }
 
     fn miner_loop(&mut self) {
-        let mut parent = self.blockchain.lock().unwrap().tip(); // MY CODE
-        println!("{}", parent);
+
+        // MY CODE
+        let mut parent = {self.blockchain.lock().unwrap().tip()}; // MY CODE
+        // END OF MY CODE
 
         // main mining loop
         loop {
@@ -156,7 +158,7 @@ impl Context {
             // build a block
             let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis(); // time now in milliseconds
 
-            let parent_block = self.blockchain.lock().unwrap().get_parent_block(parent);
+            let parent_block = {self.blockchain.lock().unwrap().get_parent_block(parent)};
             let difficulty = parent_block.get_difficulty();
             
             // content is empty for now
@@ -177,10 +179,11 @@ impl Context {
             // check if successful
             if new_block.hash() <= difficulty {
                 self.finished_block_chan.send(new_block.clone()).expect("Send finished block error");
-                self.blockchain.lock().unwrap().insert(&new_block);
-                parent = self.blockchain.lock().unwrap().tip();
+                {self.blockchain.lock().unwrap().insert(&new_block)};
 
+                parent = self.blockchain.lock().unwrap().tip();
                 let zero_parent = H256::from([0; 32]);
+
                 if parent == zero_parent {
                     break;
                 }
