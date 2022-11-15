@@ -5,7 +5,9 @@ use crate::types::hash::{H256, Hashable};
 use std::sync::{Arc, Mutex};
 use crate::types::block::Block;
 use crate::blockchain::Blockchain;
+use crate::blockchain::Mempool;
 use std::collections::HashMap;
+use crate::types::transaction::{self, SignedTransaction};
 
 use log::{debug, warn, error};
 
@@ -21,6 +23,7 @@ pub struct Worker {
     num_worker: usize,
     server: ServerHandle,
     blockchain: Arc<Mutex<Blockchain>>,
+    mempool: Arc<Mutex<Mempool>>,
 }
 
 
@@ -30,12 +33,14 @@ impl Worker {
         msg_src: smol::channel::Receiver<(Vec<u8>, peer::Handle)>,
         server: &ServerHandle,
         blockchain: &Arc<Mutex<Blockchain>>,
+        mempool: &Arc<Mutex<Mempool>>,
     ) -> Self {
         Self {
             msg_chan: msg_src,
             num_worker,
             server: server.clone(),
             blockchain: blockchain.clone(),
+            mempool: mempool.clone(),
         }
     }
 
@@ -101,57 +106,118 @@ impl Worker {
                     }
                 }
                 Message::Blocks(nonce) => {
+                    // NOTE: ORPHAN BUFFER MUST BE OUTSIDE LOOP, OTHERWISE RESETS EVERY LOOP
                     // orphan buffer
                     // key is parent of block, value is block
                     let mut orphan_buffer: HashMap<H256, Block> = HashMap::new();
 
                     for el in nonce {
                         let mut new_blocks: Vec<H256> = Vec::new();
+                        let content_data = el.get_content();
 
-                        if !{self.blockchain.lock().unwrap().is_present(el.hash())} {
-                            // PoW check
-                            if el.hash() <= el.get_difficulty() {
-                                // parent check
-                                if self.blockchain.lock().unwrap().is_present(el.get_parent()) {
-                                    // check difficulty in block header consistent with view
-                                    if el.get_difficulty() == self.blockchain.lock().unwrap().get_parent_block(el.get_parent()).get_difficulty() {
-                                        // insert into blockchain
-                                        {self.blockchain.lock().unwrap().insert(&el)};
-                                        // println!("inserted block -- network worker");
-                                        // println!("{}", el.hash());
-                                        // insert into vector of new blocks
-                                        new_blocks.push(el.hash());
-
-                                        // orphan block handler
-                                        let mut count = el.clone();
-                                        while orphan_buffer.contains_key(&count.hash()) {
-                                            // process orphan block
-                                            let orphan = orphan_buffer.get(&count.hash()).unwrap();
-                                            {self.blockchain.lock().unwrap().insert(&orphan)};
-                                            new_blocks.push(orphan.hash());
-
-                                            // update counter
-                                            count = orphan.clone();
-                                        }
-                                    } 
-                                }
-                                else {
-                                    // add block to orphan buffer
-                                    orphan_buffer.insert(el.get_parent(), el.clone());
-
-                                    // send getBlocks message with parent hash
-                                    let mut to_send: Vec<H256> = Vec::new();
-                                    to_send.push(el.clone().get_parent().hash());
-                                    peer.write(Message::GetBlocks(to_send));
-                                }
-                                
+                        // check transaction in block valid
+                        let mut transaction_valid = true;
+                        for element in content_data {
+                            if !transaction::verify(&element.get_t(), &element.get_public_key(), &element.get_sig()) {
+                                transaction_valid = false;
+                                break;
                             }
                         }
+
+                        if transaction_valid {
+                            if !{self.blockchain.lock().unwrap().is_present(el.hash())} {
+                                // PoW check
+                                if el.hash() <= el.get_difficulty() {
+                                    // parent check
+                                    if self.blockchain.lock().unwrap().is_present(el.get_parent()) {
+                                        // check difficulty in block header consistent with view
+                                        if el.get_difficulty() == {self.blockchain.lock().unwrap().get_parent_block(el.get_parent()).get_difficulty()} {
+                                            // insert into blockchain
+                                            {self.blockchain.lock().unwrap().insert(&el)};
+                                            // println!("inserted block -- network worker");
+                                            // println!("{}", el.hash());
+                                            // insert into vector of new blocks
+                                            new_blocks.push(el.hash());
+    
+                                            // orphan block handler
+                                            let mut count = el.clone();
+                                            while orphan_buffer.contains_key(&count.hash()) {
+                                                // process orphan block
+                                                let orphan = orphan_buffer.get(&count.hash()).unwrap();
+                                                {self.blockchain.lock().unwrap().insert(&orphan)};
+                                                new_blocks.push(orphan.hash());
+    
+                                                // update counter
+                                                count = orphan.clone();
+                                            }
+                                        } 
+                                    }
+                                    else {
+                                        // add block to orphan buffer
+                                        orphan_buffer.insert(el.get_parent(), el.clone());
+    
+                                        // send getBlocks message with parent hash
+                                        let mut to_send: Vec<H256> = Vec::new();
+                                        to_send.push(el.clone().get_parent().hash());
+                                        peer.write(Message::GetBlocks(to_send));
+                                    }
+                                    
+                                }
+                            }
+                        }
+                        
                         // broadcast new blocks
                         self.server.broadcast(Message::NewBlockHashes(new_blocks));
                     }
-                } // all other cases
-                _ => unimplemented!(),
+                } 
+                Message::NewTransactionHashes(nonce) => {
+                    // same as NewBlockHashes
+                    for el in nonce {
+                        if !{self.mempool.lock().unwrap().is_present(el)} {
+                            let mut transactions: Vec<H256> = Vec::new();
+                            transactions.push(el);
+                            peer.write(Message::GetTransactions(transactions));
+
+                            println!("inside network new transaction hashes");
+                        }
+                    }
+                }
+                Message::GetTransactions(nonce) => {
+                    // same as GetBlocks
+                    for el in nonce {
+                        let mut transactions: Vec<SignedTransaction> = Vec::new();
+                        {
+                        let current_mempool = self.mempool.lock().unwrap();
+                        if current_mempool.is_present(el) {
+                            drop(current_mempool);
+                            transactions.push(self.mempool.lock().unwrap().get_transaction(el));
+                            peer.write(Message::Transactions(transactions));
+                            println!("inside network get transactions");
+                        }
+                        }
+                    }
+                }
+                Message::Transactions(nonce) => {
+                    // same as Blocks
+                    for el in nonce {
+                        // check transaction signed correctly
+                        println!("outside verify in transation worker");
+                        let transaction_verified = transaction::verify(&el.get_t(), &el.get_public_key(), &el.get_sig());
+                        println!("{}", transaction_verified);
+                        if transaction_verified {
+                            let mut transactions: Vec<H256> = Vec::new();
+
+                            // if not in mempool, insert
+                            {self.mempool.lock().unwrap().insert(el.hash(), &el);}
+
+                            transactions.push(el.hash());
+                            self.server.broadcast(Message::NewTransactionHashes(transactions));
+                            println!("inside network transactions");
+                        }
+
+                        
+                    }
+                }
             }
         }
     }
@@ -181,7 +247,8 @@ fn generate_test_worker_and_start() -> (TestMsgSender, ServerTestReceiver, Vec<H
     let (server, server_receiver) = ServerHandle::new_for_test();
     let (test_msg_sender, msg_chan) = TestMsgSender::new();
     let blockchain = Arc::new(Mutex::new(Blockchain::new()));
-    let worker = Worker::new(1, msg_chan, &server, &blockchain);
+    let mem_pool = Arc::new(Mutex::new(Mempool::new()));
+    let worker = Worker::new(1, msg_chan, &server, &blockchain, &mem_pool);
 
     // blockchain longest chain
     let longest = worker.blockchain.lock().unwrap().all_blocks_in_longest_chain();
