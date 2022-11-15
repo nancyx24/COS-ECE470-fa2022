@@ -11,9 +11,10 @@ use crate::types::hash::Hashable;
 pub struct Transaction {
     // MY CODE
 
-    sender: Address,
+    // account-based model transaction
     receiver: Address,
     value: i128, // make big for now
+    nonce: u32, 
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -23,6 +24,13 @@ pub struct SignedTransaction {
     t: Transaction,
     sig: Vec<u8>,
     public_key: Vec<u8>,
+}
+
+impl Transaction {
+    // new function
+    pub fn new(receiver: Address, value: i128, nonce: u32)-> Transaction {
+        Transaction {receiver, value, nonce}
+    }
 }
 
 impl Hashable for SignedTransaction {
@@ -38,6 +46,26 @@ impl Hashable for SignedTransaction {
         // let hash: [u8] = digest::digest(&digest::SHA256, serialized).as_ref();
         // let hash_array = hash.try_into().unwrap();
         // H256::from(hash_array)
+    }
+}
+
+impl SignedTransaction {
+    // new function
+    pub fn new(t: Transaction, sig: Vec<u8>, public_key: Vec<u8>) -> SignedTransaction {
+        SignedTransaction {t, sig, public_key}
+    }
+
+    // get transaction
+    pub fn get_t(&self) -> Transaction {
+        self.t.clone()
+    }
+    // get public key
+    pub fn get_public_key(&self) -> Vec<u8> {
+        self.public_key.clone()
+    }
+    // get signature
+    pub fn get_sig(&self) -> Vec<u8> {
+        self.sig.clone()
     }
 }
 
@@ -69,13 +97,12 @@ pub fn generate_random_transaction() -> Transaction {
     // MY CODE
 
     // makes random sender, receiver, value
-    let sender_array: [u8; 20] = rand::random();
     let receiver_array: [u8; 20] = rand::random();
-    let sender = Address::from(sender_array);
     let receiver = Address::from(receiver_array);
     let value = rand::random();
+    let nonce = rand::random();
 
-    Transaction{sender: sender, receiver: receiver, value: value}
+    Transaction{receiver: receiver, value: value, nonce: nonce}
 }
 
 // DO NOT CHANGE THIS COMMENT, IT IS FOR AUTOGRADER. BEFORE TEST
