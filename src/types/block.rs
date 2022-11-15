@@ -57,6 +57,23 @@ impl Block {
     pub fn get_content(&self) -> Vec<transaction::SignedTransaction> {
         self.data.content_data.clone()
     }
+
+    // return hashed content as vector of string
+    pub fn get_hashed_content(&self) -> Vec<H256> {
+        let vector = self.data.content_data.clone();
+
+        let mut signed_tx_vec: Vec<H256> = Vec::new();
+        
+        for el in vector {
+            signed_tx_vec.push(el.hash());
+        }
+
+        signed_tx_vec
+    }
+
+    pub fn insert_transaction(&mut self, tx: transaction::SignedTransaction) {
+        self.data.content_data.push(tx);
+    }
 }
 
 // MY CODE
@@ -95,7 +112,7 @@ pub fn generate_random_block(parent: &H256) -> Block {
     let parent = *parent;
     let nonce: u32 = rand::random();
     let zeros: [u8; 32] = [0; 32];
-    let difficulty: H256 = H256::from(zeros);
+    let difficulty: H256 = [255u8; 32].into();
     let timestamp = 0;
     let content_data: Vec<transaction::SignedTransaction> = Vec::new();
     let data: Content = Content{ content_data };
