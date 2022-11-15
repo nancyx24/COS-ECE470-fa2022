@@ -11,10 +11,9 @@ use std::sync::{Arc, Mutex};
 use crate::types::block::Block;
 use crate::types::block;
 use crate::miner::block::Content;
-use crate::blockchain::Blockchain;
+use crate::blockchain::{Blockchain, Mempool};
 use crate::types::merkle::MerkleTree;
 use super::types::hash::{Hashable, H256};
-use std::convert::TryInto;
 use super::types::transaction;
 
 enum ControlSignal {
@@ -35,6 +34,7 @@ pub struct Context {
     operating_state: OperatingState,
     finished_block_chan: Sender<Block>,
     blockchain: Arc<Mutex<Blockchain>>,
+    mempool: Arc<Mutex<Mempool>>,
 }
 
 #[derive(Clone)]
@@ -43,17 +43,19 @@ pub struct Handle {
     control_chan: Sender<ControlSignal>,
 }
 
-pub fn new(blockchain: Arc<Mutex<Blockchain>>) -> (Context, Handle, Receiver<Block>) {
+pub fn new(blockchain: Arc<Mutex<Blockchain>>, mempool: Arc<Mutex<Mempool>>) -> (Context, Handle, Receiver<Block>) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
     let (finished_block_sender, finished_block_receiver) = unbounded();
 
     let clone_context = Arc::clone(&blockchain);
+    let clone_mempool = Arc::clone(&mempool);
 
     let ctx = Context {
         control_chan: signal_chan_receiver,
         operating_state: OperatingState::Paused,
         finished_block_chan: finished_block_sender,
         blockchain: clone_context,
+        mempool: clone_mempool,
     };
 
     let handle = Handle {
@@ -66,7 +68,8 @@ pub fn new(blockchain: Arc<Mutex<Blockchain>>) -> (Context, Handle, Receiver<Blo
 #[cfg(any(test,test_utilities))]
 fn test_new() -> (Context, Handle, Receiver<Block>) {
     let blockchain = Arc::new(Mutex::new(Blockchain::new()));
-    new(blockchain)
+    let mempool = Arc::new(Mutex::new(Mempool::new()));
+    new(blockchain, mempool)
 }
 
 impl Handle {
@@ -174,10 +177,43 @@ impl Context {
 
             // construct block
             let header = block::build_header(parent, nonce, difficulty, timestamp, merkle_root);
-            let new_block = block::build_block(header, data);
+            let mut new_block = block::build_block(header, data);
 
             // check if successful
             if new_block.hash() <= difficulty {
+                // add transactions to block being mined
+                // set limit to 50, CAN CHANGE LATER
+                let mut count = 0;
+
+                println!("inside miner loop");
+                let current_mempool = self.mempool.lock().unwrap();
+
+                for (_k, v) in current_mempool.get_mempool().iter() {
+                    println!("inside of insert into block loop");
+                    if count < 50 { // LIMIT
+                        new_block.insert_transaction(v.clone());
+                        println!("{}", v.hash());
+                        println!("^^hash");
+                        count = count + 1;
+                        println!("{}", count);
+                        println!("^^count");
+
+                        // remove from mempool
+                        // {self.mempool.lock().unwrap().remove(k.clone())};
+                    }
+                    else {
+                        break;
+                    }
+                }
+
+                drop(current_mempool);
+
+                let transactions_in_block = new_block.get_content();
+                for el in transactions_in_block {
+                    {self.mempool.lock().unwrap().remove(el.hash())};
+                    println!("removed from mempool");
+                }
+
                 self.finished_block_chan.send(new_block.clone()).expect("Send finished block error");
                 {self.blockchain.lock().unwrap().insert(&new_block)};
 
