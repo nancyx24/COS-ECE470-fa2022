@@ -2,14 +2,61 @@ use crate::types::hash::H256;
 use crate::types::hash::Hashable;
 use std::collections::HashMap;
 use super::types::block::{self, Block, Header, Content};
-use super::types::transaction;
-use std::time::{SystemTime, UNIX_EPOCH};
+use super::types::transaction::{Transaction, SignedTransaction};
 
 pub struct Blockchain {
     block_hash: HashMap<H256, Block>, // key = hash, value = block
     length_hash: HashMap<H256, u128>, // key = hash, value = length of block
     tip: H256, // last block's hash in longest chain
     longest_length: u128, // length of longest chain
+}
+
+// structure to store received valid transactions not included blockchain yet
+pub struct Mempool {
+    mem_pool: HashMap<H256, SignedTransaction>,
+}
+
+impl Mempool {
+    // constructor
+    pub fn new() -> Self {
+        Self {mem_pool: HashMap::new()}
+    }
+
+    // checks if present
+    pub fn is_present(&self, hash: H256) -> bool {
+
+        let output = match self.mem_pool.get(&hash) {
+            None => false,
+            _ => true,
+        };
+
+        output
+    }
+
+    // get transaction
+    pub fn get_transaction(&self, hash: H256) -> SignedTransaction {
+        self.mem_pool.get(&hash).unwrap().clone()
+    }
+
+    // get mem_pool
+    pub fn get_mempool(&self) -> HashMap<H256, SignedTransaction> {
+        self.mem_pool.clone()
+    }
+
+    // insert transaction into hashmap
+    pub fn insert(&mut self, hash: H256, trans: &SignedTransaction) {
+        let transaction_clone = trans.clone();
+        self.mem_pool.insert(hash, transaction_clone); // ASK ABOUT THIS
+
+        // let block_hash = block.hash();
+        // let block_clone = block.clone();
+        // self.block_hash.insert(block_hash, block_clone);
+    }
+
+    // remove transaction from hashmap
+    pub fn remove(&mut self, hash: H256) {
+        self.mem_pool.remove(&hash);
+    }
 }
 
 impl Blockchain {
@@ -20,10 +67,12 @@ impl Blockchain {
         // create genesis block
         let nonce: u32 = 0;
         let zeros: [u8; 32] = [0; 32];
-        let parent: H256 = H256::from(zeros);
-        let difficulty: H256 = [100u8;32].into();
+        let parent: H256 = H256::from(zeros); // total 64
+        let difficulty = hex_literal::hex!("0000a9ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into();
+        // hex_literal::hex!("00000effffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into(); // five 0s and all fs
+        // H256::from([1u8; 32])
         let timestamp = 0;
-        let content_data: Vec<transaction::SignedTransaction> = Vec::new();
+        let content_data: Vec<SignedTransaction> = Vec::new();
         let data: Content = block::build_content(content_data);
 
         // merkle root of empty input
