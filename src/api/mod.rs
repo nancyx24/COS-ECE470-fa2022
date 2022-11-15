@@ -1,8 +1,10 @@
 use serde::Serialize;
 use crate::blockchain::Blockchain;
 use crate::miner::Handle as MinerHandle;
+use crate::txgen::Handle as TxHandle;
 use crate::network::server::Handle as NetworkServerHandle;
 use crate::network::message::Message;
+use crate::types::hash::H256;
 
 use log::info;
 use std::collections::HashMap;
@@ -18,6 +20,7 @@ pub struct Server {
     miner: MinerHandle,
     network: NetworkServerHandle,
     blockchain: Arc<Mutex<Blockchain>>,
+    tx_gen: TxHandle, 
 }
 
 #[derive(Serialize)]
@@ -53,6 +56,7 @@ impl Server {
         miner: &MinerHandle,
         network: &NetworkServerHandle,
         blockchain: &Arc<Mutex<Blockchain>>,
+        tx_gen: &TxHandle, 
     ) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
@@ -60,12 +64,14 @@ impl Server {
             miner: miner.clone(),
             network: network.clone(),
             blockchain: Arc::clone(blockchain),
+            tx_gen: tx_gen.clone(),
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {
                 let miner = server.miner.clone();
                 let network = server.network.clone();
                 let blockchain = Arc::clone(&server.blockchain);
+                let tx_gen = server.tx_gen.clone();
                 thread::spawn(move || {
                     // a valid url requires a base
                     let base_url = Url::parse(&format!("http://{}/", &addr)).unwrap();
@@ -102,8 +108,28 @@ impl Server {
                             respond_result!(req, true, "ok");
                         }
                         "/tx-generator/start" => {
-                            // unimplemented!()
-                            respond_result!(req, false, "unimplemented!");
+                            let params = url.query_pairs();
+                            let params: HashMap<_, _> = params.into_owned().collect();
+                            let theta = match params.get("theta") {
+                                Some(v) => v,
+                                None => {
+                                    respond_result!(req, false, "missing theta");
+                                    return;
+                                }
+                            };
+                            let theta = match theta.parse::<u64>() {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    respond_result!(
+                                        req,
+                                        false,
+                                        format!("error parsing theta: {}", e)
+                                    );
+                                    return;
+                                }
+                            };
+                            tx_gen.start(theta);
+                            respond_result!(req, true, "ok");
                         }
                         "/network/ping" => {
                             network.broadcast(Message::Ping(String::from("Test ping")));
@@ -116,8 +142,19 @@ impl Server {
                             respond_json!(req, v_string);
                         }
                         "/blockchain/longest-chain-tx" => {
+                            let blockchain = blockchain.lock().unwrap();
+                            let v = blockchain.all_blocks_in_longest_chain();
+                            let mut transactions: Vec<Vec<String>> = Vec::new();
+
+                            for el in v {
+                                let block = blockchain.get_parent_block(el);
+                                let signed_tx_vec = block.get_hashed_content();
+                                let signed_tx_vec_string: Vec<String> = signed_tx_vec.into_iter().map(|h|h.to_string()).collect();
+                                transactions.push(signed_tx_vec_string);
+                            }
+                            respond_json!(req, transactions);
                             // unimplemented!()
-                            respond_result!(req, false, "unimplemented!");
+                            // respond_result!(req, false, "unimplemented!");
                         }
                         "/blockchain/longest-chain-tx-count" => {
                             // unimplemented!()
