@@ -3,7 +3,7 @@ use log::{debug, info};
 use crate::types::block::Block;
 use crate::network::server::Handle as ServerHandle;
 use std::thread;
-use crate::blockchain::Blockchain;
+use crate::blockchain::{Blockchain, Mempool};
 use std::sync::{Arc, Mutex};
 use crate::types::hash::{H256, Hashable};
 use crate::network::message::Message;
@@ -43,7 +43,7 @@ impl Worker {
             let _block = self.finished_block_chan.recv().expect("Receive finished block error");
             
             // TODO for student: insert this finished block to blockchain, and broadcast this block hash
-            self.blockchain.lock().unwrap().insert(&_block);
+            {self.blockchain.lock().unwrap().insert(&_block)};
             // println!("inserted block");
             // println!("{}", _block.hash());
 
