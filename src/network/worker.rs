@@ -8,6 +8,9 @@ use crate::blockchain::Blockchain;
 use crate::blockchain::Mempool;
 use std::collections::HashMap;
 use crate::types::transaction::{self, SignedTransaction};
+use crate::types::address::Address;
+
+use ring::signature::Ed25519KeyPair;
 
 use log::{debug, warn, error};
 
@@ -56,6 +59,8 @@ impl Worker {
     }
 
     fn worker_loop(&self) {
+        let mut orphan_buffer: HashMap<H256, Block> = HashMap::new();
+
         loop {
             let result = smol::block_on(self.msg_chan.recv());
             if let Err(e) = result {
@@ -106,10 +111,8 @@ impl Worker {
                     }
                 }
                 Message::Blocks(nonce) => {
-                    // NOTE: ORPHAN BUFFER MUST BE OUTSIDE LOOP, OTHERWISE RESETS EVERY LOOP
                     // orphan buffer
                     // key is parent of block, value is block
-                    let mut orphan_buffer: HashMap<H256, Block> = HashMap::new();
 
                     for el in nonce {
                         let mut new_blocks: Vec<H256> = Vec::new();
@@ -178,7 +181,7 @@ impl Worker {
                             transactions.push(el);
                             peer.write(Message::GetTransactions(transactions));
 
-                            println!("inside network new transaction hashes");
+                            // println!("inside network new transaction hashes");
                         }
                     }
                 }
@@ -192,7 +195,7 @@ impl Worker {
                             drop(current_mempool);
                             transactions.push(self.mempool.lock().unwrap().get_transaction(el));
                             peer.write(Message::Transactions(transactions));
-                            println!("inside network get transactions");
+                            // println!("inside network get transactions");
                         }
                         }
                     }
@@ -201,21 +204,37 @@ impl Worker {
                     // same as Blocks
                     for el in nonce {
                         // check transaction signed correctly
-                        println!("outside verify in transation worker");
+                        // println!("outside verify in transation worker");
                         let transaction_verified = transaction::verify(&el.get_t(), &el.get_public_key(), &el.get_sig());
-                        println!("{}", transaction_verified);
+                        // println!("{}", transaction_verified);
                         if transaction_verified {
-                            let mut transactions: Vec<H256> = Vec::new();
+                            // spending check
+                            let el_public_key = el.get_public_key();
+                            let address = Address::from_public_key_bytes(el_public_key.as_slice());
+                            // get state in block at tip of blockchain
+                            let tip_hash = self.blockchain.lock().unwrap().tip();
+                            let tip_block = self.blockchain.lock().unwrap().get_parent_block(tip_hash);
+                            let tip_state = tip_block.get_state();
 
-                            // if not in mempool, insert
-                            {self.mempool.lock().unwrap().insert(el.hash(), &el);}
+                            // check if sender key is in state
+                            if tip_state.contains_key(address) {
+                                // check if balance is enough
+                                let balance = tip_state.get(address).1;
+                                if balance >= el.get_t().get_value() {
+                                    // check suggested account nonce
+                                    if el.get_t().get_nonce() == (1 + tip_state.get(address).0) {
+                                        let mut transactions: Vec<H256> = Vec::new();
 
-                            transactions.push(el.hash());
-                            self.server.broadcast(Message::NewTransactionHashes(transactions));
-                            println!("inside network transactions");
+                                        // if not in mempool, insert
+                                        {self.mempool.lock().unwrap().insert(el.hash(), &el);}
+
+                                        transactions.push(el.hash());
+                                        self.server.broadcast(Message::NewTransactionHashes(transactions));
+                                        // println!("inside network transactions");
+                                    }
+                                }
+                            }
                         }
-
-                        
                     }
                 }
             }
@@ -246,7 +265,11 @@ impl TestMsgSender {
 fn generate_test_worker_and_start() -> (TestMsgSender, ServerTestReceiver, Vec<H256>) {
     let (server, server_receiver) = ServerHandle::new_for_test();
     let (test_msg_sender, msg_chan) = TestMsgSender::new();
-    let blockchain = Arc::new(Mutex::new(Blockchain::new()));
+
+    // doesn't matter
+    let key_pair = Ed25519KeyPair::from_seed_unchecked(&[0; 32]).unwrap();
+
+    let blockchain = Arc::new(Mutex::new(Blockchain::new(key_pair)));
     let mem_pool = Arc::new(Mutex::new(Mempool::new()));
     let worker = Worker::new(1, msg_chan, &server, &blockchain, &mem_pool);
 
