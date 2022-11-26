@@ -8,13 +8,14 @@ use std::time::{SystemTime, UNIX_EPOCH, Duration};
 use std::thread;
 use std::sync::{Arc, Mutex};
 
-use crate::types::block::Block;
-use crate::types::block;
-use crate::miner::block::Content;
+use crate::types::block::{self, Block, Content, State};
 use crate::blockchain::{Blockchain, Mempool};
 use crate::types::merkle::MerkleTree;
 use super::types::hash::{Hashable, H256};
 use super::types::transaction;
+use crate::types::address::Address;
+
+use ring::signature::Ed25519KeyPair;
 
 enum ControlSignal {
     Start(u64), // the number controls the lambda of interval between block generation
@@ -67,7 +68,9 @@ pub fn new(blockchain: Arc<Mutex<Blockchain>>, mempool: Arc<Mutex<Mempool>>) -> 
 
 #[cfg(any(test,test_utilities))]
 fn test_new() -> (Context, Handle, Receiver<Block>) {
-    let blockchain = Arc::new(Mutex::new(Blockchain::new()));
+    // doesn't matter
+    let key_pair = Ed25519KeyPair::from_seed_unchecked(&[0; 32]).unwrap();
+    let blockchain = Arc::new(Mutex::new(Blockchain::new(key_pair)));
     let mempool = Arc::new(Mutex::new(Mempool::new()));
     new(blockchain, mempool)
 }
@@ -161,7 +164,8 @@ impl Context {
             // build a block
             let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis(); // time now in milliseconds
 
-            let parent_block = {self.blockchain.lock().unwrap().get_parent_block(parent)};
+            let blockchain = {self.blockchain.lock().unwrap()};
+            let parent_block = blockchain.get_parent_block(parent);
             let difficulty = parent_block.get_difficulty();
             
             // content is empty for now
@@ -175,9 +179,12 @@ impl Context {
             // nonce, randomly generated
             let nonce = rand::random();
 
+            // state
+            let state = State::new();
+
             // construct block
             let header = block::build_header(parent, nonce, difficulty, timestamp, merkle_root);
-            let mut new_block = block::build_block(header, data);
+            let mut new_block = block::build_block(header, data, state);
 
             // check if successful
             if new_block.hash() <= difficulty {
@@ -185,18 +192,19 @@ impl Context {
                 // set limit to 50, CAN CHANGE LATER
                 let mut count = 0;
 
-                println!("inside miner loop");
+                // println!("inside miner loop");
                 let current_mempool = self.mempool.lock().unwrap();
+                println!("mempool empty?");
+                println!("{}", current_mempool.get_mempool().is_empty());
 
                 for (_k, v) in current_mempool.get_mempool().iter() {
-                    println!("inside of insert into block loop");
                     if count < 50 { // LIMIT
                         new_block.insert_transaction(v.clone());
-                        println!("{}", v.hash());
-                        println!("^^hash");
+                        // println!("{}", v.hash());
+                        // println!("^^hash");
                         count = count + 1;
-                        println!("{}", count);
-                        println!("^^count");
+                        // println!("{}", count);
+                        // println!("^^count");
 
                         // remove from mempool
                         // {self.mempool.lock().unwrap().remove(k.clone())};
@@ -211,13 +219,127 @@ impl Context {
                 let transactions_in_block = new_block.get_content();
                 for el in transactions_in_block {
                     {self.mempool.lock().unwrap().remove(el.hash())};
-                    println!("removed from mempool");
+                    // println!("removed from mempool");
                 }
 
+                println!("value of count");
+                println!("{}", count);
+
+                println!("mempool empty after inserting into block?");
+                println!("{}", {self.mempool.lock().unwrap().get_mempool().is_empty()});
+
+                // update state in block
+                let content = new_block.get_content(); // parent block above when generating new block
+                let mut parent_state = parent_block.get_state();
+
+                // loop through transactions in content
+                for tx in content {
+                    // println!("inside tx content loop");
+
+                    let public_key = tx.get_public_key();
+                    let sender = Address::from_public_key_bytes(public_key.as_slice());
+
+                    // update state
+                    // implement checks
+                    let transaction_verified = transaction::verify(&tx.get_t(), &tx.get_public_key(), &tx.get_sig());
+                    // println!("{}", transaction_verified);
+                    if transaction_verified {
+                        // spending check
+                        // println!("transaction verified");
+                        if parent_state.contains_key(sender) {
+                            let sender_nonce = parent_state.get(sender).0;
+                            let sender_balance = parent_state.get(sender).1;
+
+                            let receiver = tx.get_t().get_receiver();
+                            let receiver_nonce: u32;
+                            let receiver_balance: u32;
+
+                            // if receiver is new, make a new account
+                            if parent_state.contains_key(receiver) {
+                                receiver_nonce = parent_state.get(receiver).0;
+                                receiver_balance = parent_state.get(receiver).1;
+                            }
+                            else {
+                                receiver_nonce = rand::random();
+                                receiver_balance = 0;
+                            }
+
+                            // println!("parent state contains key");
+                            if sender_balance >= tx.get_t().get_value() {
+                                // println!("balance correct");
+                                if tx.get_t().get_nonce() == (1 + sender_nonce) {
+                                    // println!("nonce correct");
+                                    parent_state.insert(sender, sender_nonce, sender_balance - tx.get_t().get_value()); // update sender account
+                                    parent_state.insert(receiver, receiver_nonce, receiver_balance + tx.get_t().get_value()); // update receiver account
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // update state of block
+                new_block.put_state(parent_state.clone());
+                println!("state empty?");
+                println!("{}", parent_state.get_state().is_empty());
+
+                // update transaction mempool
+                let mempool_copy = {self.mempool.lock().unwrap()};
+                println!("is mempool_copy empty?");
+                println!("{}", mempool_copy.get_mempool().is_empty());
+
+                let mut new_mempool = Mempool::new();
+                // Arc::new(Mutex::new(Mempool::new()))
+
+                for (_k, v) in mempool_copy.get_mempool().iter() {
+                    let current_state = new_block.get_state();
+
+                    let public_key = v.get_public_key();
+                    let sender = Address::from_public_key_bytes(public_key.as_slice());
+                    let sender_balance = current_state.get(sender).1;
+                    let sender_nonce = current_state.get(sender).0;
+
+                    // implement checks
+                    let transaction_verified = transaction::verify(&v.get_t(), &v.get_public_key(), &v.get_sig());
+                    println!("transaction verified");
+                    if transaction_verified {
+                        // spending check
+                        if new_block.get_state().contains_key(sender) {
+                            println!("contains sender");
+                            if sender_balance >= v.get_t().get_value() {
+                                println!("sender balance");
+                                println!("{}", sender_balance);
+                                println!("transaction value");
+                                println!("{}", v.get_t().get_value());
+                                if v.get_t().get_nonce() == (1 + sender_nonce) {
+                                    println!("nonce correct");
+                                    new_mempool.insert(v.hash(), &v);
+                                }
+                                
+                            }
+                        }
+                    }
+                }
+
+                drop(mempool_copy);
+
+                println!("new mempool empty?");
+                println!("{}", new_mempool.get_mempool().is_empty());
+
+                self.mempool = Arc::new(Mutex::new(new_mempool));
+                
+
+                // send off finished block
+
+                // println!("before send off miner mod");
                 self.finished_block_chan.send(new_block.clone()).expect("Send finished block error");
+                // println!("after send off miner mod");
+
+                drop(blockchain);
                 {self.blockchain.lock().unwrap().insert(&new_block)};
+                // println!("after insert new block");
 
                 parent = self.blockchain.lock().unwrap().tip();
+                // println!("after assign parent");
                 let zero_parent = H256::from([0; 32]);
 
                 if parent == zero_parent {
