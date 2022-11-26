@@ -160,6 +160,51 @@ impl Server {
                             // unimplemented!()
                             respond_result!(req, false, "unimplemented!");
                         }
+                        "/blockchain/state" => {
+                            let params = url.query_pairs();
+                            let params: HashMap<_, _> = params.into_owned().collect();
+                            let block = match params.get("block") {
+                                Some(v) => v,
+                                None => {
+                                    respond_result!(req, false, "missing block");
+                                    return;
+                                }
+                            };
+                            let block = match block.parse::<u64>() {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    respond_result!(
+                                        req,
+                                        false,
+                                        format!("error parsing block: {}", e)
+                                    );
+                                    return;
+                                }
+                            };
+
+                            let blockchain = blockchain.lock().unwrap();
+                            let v = blockchain.all_blocks_in_longest_chain();
+                            let block_hash = v[(block as usize)];
+                            let block = blockchain.get_parent_block(block_hash);
+                            let state = block.get_state().get_state();
+
+                            let mut output: Vec<String> = Vec::new();
+
+                            for (k, v) in state.iter() {
+                                // make tuple string
+                                let mut tuple_string = String::from("(");
+                                tuple_string.push_str(&k.to_string());
+                                tuple_string.push_str(", ");
+                                tuple_string.push_str(&v.0.to_string());
+                                tuple_string.push_str(", ");
+                                tuple_string.push_str(&v.1.to_string());
+                                tuple_string.push(')');
+
+                                // push into output
+                                output.push(tuple_string);
+                            }
+                            respond_json!(req, output);
+                        }
                         _ => {
                             let content_type =
                                 "Content-Type: application/json".parse::<Header>().unwrap();
