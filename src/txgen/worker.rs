@@ -45,14 +45,14 @@ impl Worker {
             
             // TODO for student: insert this finished block to mempool, and broadcast this block hash
             {self.mempool.lock().unwrap().insert(_tx.hash(), &_tx)};
-            println!("{}", _tx.hash());
-            println!("inside txgen worker");
+            // println!("{}", _tx.hash());
+            // println!("inside txgen worker");
 
             // if successful, broadcast message NewTransactionHashes
             let mut message: Vec<H256> = Vec::new();
             message.push(_tx.hash());
             self.server.broadcast(Message::NewTransactionHashes(message));
-            println!("broadcast in txgen worker");
+            // println!("broadcast in txgen worker");
         }
     }
 }
