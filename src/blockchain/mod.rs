@@ -1,14 +1,18 @@
 use crate::types::hash::H256;
 use crate::types::hash::Hashable;
 use std::collections::HashMap;
-use super::types::block::{self, Block, Header, Content};
-use super::types::transaction::{Transaction, SignedTransaction};
+use super::types::block::{self, Block, Header, Content, State};
+use super::types::transaction::{self, Transaction, SignedTransaction};
+use crate::types::address::Address;
+use ring::signature::KeyPair;
+use ring::signature::Ed25519KeyPair;
 
 pub struct Blockchain {
     block_hash: HashMap<H256, Block>, // key = hash, value = block
     length_hash: HashMap<H256, u128>, // key = hash, value = length of block
     tip: H256, // last block's hash in longest chain
     longest_length: u128, // length of longest chain
+    blockchain_state: HashMap<H256, State>, // key = hash of block, value = state
 }
 
 // structure to store received valid transactions not included blockchain yet
@@ -61,18 +65,34 @@ impl Mempool {
 
 impl Blockchain {
     /// Create a new blockchain, only containing the genesis block
-    pub fn new() -> Self {
+    pub fn new(key_pair: Ed25519KeyPair) -> Self {
         // MY CODE
 
         // create genesis block
-        let nonce: u32 = 0;
         let zeros: [u8; 32] = [0; 32];
         let parent: H256 = H256::from(zeros); // total 64
         let difficulty = hex_literal::hex!("0000a9ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into();
         // hex_literal::hex!("00000effffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into(); // five 0s and all fs
         // H256::from([1u8; 32])
         let timestamp = 0;
-        let content_data: Vec<SignedTransaction> = Vec::new();
+
+        // generate random key_pair and transaction -- CHECK THIS
+        let receiver = Address::from_public_key_bytes(key_pair.public_key().as_ref());
+        let value = 1000000000; // I chose this
+        let nonce = 1000000; // I chose this
+
+        let public_key = key_pair.public_key().as_ref().to_vec();
+        let transaction = Transaction::new(receiver, value, nonce);
+        let sig = transaction::sign(&transaction, &key_pair).as_ref().to_vec();
+        let signed_transaction = SignedTransaction::new(transaction, sig, public_key);
+
+        // make state
+        let mut state = State::new();
+        state.insert(receiver, nonce, value);
+
+        // make content
+        let mut content_data: Vec<SignedTransaction> = Vec::new();
+        content_data.push(signed_transaction);
         let data: Content = block::build_content(content_data);
 
         // merkle root of empty input
@@ -80,8 +100,12 @@ impl Blockchain {
         let merkle_root: H256 = H256::from(zeros); 
         
         let header: Header = block::build_header(parent, nonce, difficulty, timestamp, merkle_root);
-        let genesis: Block = block::build_block(header, data);
+        let genesis: Block = block::build_block(header, data, state.clone());
         let genesis_hash = genesis.hash();
+
+        // make blockchain state
+        let mut blockchain_state: HashMap<H256, State> = HashMap::new();
+        blockchain_state.insert(genesis_hash.clone(), state.clone());
 
         // create contents for Blockchain
         let mut block_hash = HashMap::new();
@@ -93,7 +117,7 @@ impl Blockchain {
         let tip = genesis_hash;
         let longest_length = 0;
 
-        Self {block_hash, length_hash, tip, longest_length}
+        Self {block_hash, length_hash, tip, longest_length, blockchain_state}
     }
 
     /// Insert a block into blockchain
@@ -183,7 +207,9 @@ mod tests {
 
     #[test]
     fn insert_one() {
-        let mut blockchain = Blockchain::new();
+        // key_pair for 6000 port (doesn't matter)
+        let key_pair = Ed25519KeyPair::from_seed_unchecked(&[0; 32]).unwrap();
+        let mut blockchain = Blockchain::new(key_pair);
         let genesis_hash = blockchain.tip();
         let block = generate_random_block(&genesis_hash);
         blockchain.insert(&block);
