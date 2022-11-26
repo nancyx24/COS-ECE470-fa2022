@@ -7,6 +7,8 @@ use crate::blockchain::{Blockchain, Mempool};
 use std::sync::{Arc, Mutex};
 use crate::types::hash::{H256, Hashable};
 use crate::network::message::Message;
+use crate::types::address::Address;
+use crate::types::transaction;
 
 #[derive(Clone)]
 pub struct Worker {
@@ -40,7 +42,7 @@ impl Worker {
 
     fn worker_loop(&self) {
         loop {
-            let _block = self.finished_block_chan.recv().expect("Receive finished block error");
+            let mut _block = self.finished_block_chan.recv().expect("Receive finished block error");
             
             // TODO for student: insert this finished block to blockchain, and broadcast this block hash
             {self.blockchain.lock().unwrap().insert(&_block)};
