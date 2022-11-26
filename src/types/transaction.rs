@@ -13,7 +13,7 @@ pub struct Transaction {
 
     // account-based model transaction
     receiver: Address,
-    value: i128, // make big for now
+    value: u32, // make big for now
     nonce: u32, 
 }
 
@@ -28,8 +28,20 @@ pub struct SignedTransaction {
 
 impl Transaction {
     // new function
-    pub fn new(receiver: Address, value: i128, nonce: u32)-> Transaction {
+    pub fn new(receiver: Address, value: u32, nonce: u32)-> Transaction {
         Transaction {receiver, value, nonce}
+    }
+
+    pub fn get_value(&self) -> u32 {
+        self.value.clone()
+    }
+
+    pub fn get_nonce(&self) -> u32 {
+        self.nonce.clone()
+    }
+
+    pub fn get_receiver(&self) -> Address {
+        self.receiver.clone()
     }
 }
 
