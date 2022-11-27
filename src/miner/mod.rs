@@ -107,6 +107,7 @@ impl Context {
         // MY CODE
         let mut parent = {self.blockchain.lock().unwrap().tip()}; // MY CODE
         // END OF MY CODE
+        // let mut current_mempool = self.mempool.lock().unwrap().get_mempool();
 
         // main mining loop
         loop {
@@ -186,19 +187,20 @@ impl Context {
             let header = block::build_header(parent, nonce, difficulty, timestamp, merkle_root);
             let mut new_block = block::build_block(header, data, state);
 
+            // add transactions to block being mined
+            // set limit to 50, CAN CHANGE LATER
+            let mut count = 0;
+
+            // println!("inside miner loop");
+            let current_mempool = {self.mempool.lock().unwrap()};
+
             // check if successful
             if new_block.hash() <= difficulty {
-                // add transactions to block being mined
-                // set limit to 50, CAN CHANGE LATER
-                let mut count = 0;
-
-                // println!("inside miner loop");
-                let current_mempool = self.mempool.lock().unwrap();
-                println!("mempool empty?");
-                println!("{}", current_mempool.get_mempool().is_empty());
+                // println!("mempool empty?");
+                // println!("{}", current_mempool.get_mempool().is_empty());
 
                 for (_k, v) in current_mempool.get_mempool().iter() {
-                    if count < 50 { // LIMIT
+                    if count < 10 { // LIMIT
                         new_block.insert_transaction(v.clone());
                         // println!("{}", v.hash());
                         // println!("^^hash");
@@ -222,11 +224,11 @@ impl Context {
                     // println!("removed from mempool");
                 }
 
-                println!("value of count");
-                println!("{}", count);
+                // println!("value of count");
+                // println!("{}", count);
 
-                println!("mempool empty after inserting into block?");
-                println!("{}", {self.mempool.lock().unwrap().get_mempool().is_empty()});
+                // println!("mempool empty after inserting into block?");
+                // println!("{}", {self.mempool.lock().unwrap().get_mempool().is_empty()});
 
                 // update state in block
                 let content = new_block.get_content(); // parent block above when generating new block
@@ -279,15 +281,16 @@ impl Context {
 
                 // update state of block
                 new_block.put_state(parent_state.clone());
-                println!("state empty?");
-                println!("{}", parent_state.get_state().is_empty());
+                // println!("state empty?");
+                // println!("{}", parent_state.get_state().is_empty());
 
                 // update transaction mempool
                 let mempool_copy = {self.mempool.lock().unwrap()};
-                println!("is mempool_copy empty?");
-                println!("{}", mempool_copy.get_mempool().is_empty());
+                // println!("is mempool_copy empty?");
+                // println!("{}", mempool_copy.get_mempool().is_empty());
 
-                let mut new_mempool = Mempool::new();
+                let mut to_remove = Mempool::new();
+                // let mut new_mempool_another = Mempool::new();
                 // Arc::new(Mutex::new(Mempool::new()))
 
                 for (_k, v) in mempool_copy.get_mempool().iter() {
@@ -300,32 +303,47 @@ impl Context {
 
                     // implement checks
                     let transaction_verified = transaction::verify(&v.get_t(), &v.get_public_key(), &v.get_sig());
-                    println!("transaction verified");
+                    // println!("transaction verified");
                     if transaction_verified {
                         // spending check
                         if new_block.get_state().contains_key(sender) {
-                            println!("contains sender");
+                            // println!("contains sender");
                             if sender_balance >= v.get_t().get_value() {
-                                println!("sender balance");
-                                println!("{}", sender_balance);
-                                println!("transaction value");
-                                println!("{}", v.get_t().get_value());
-                                if v.get_t().get_nonce() == (1 + sender_nonce) {
-                                    println!("nonce correct");
-                                    new_mempool.insert(v.hash(), &v);
+                                // println!("sender balance");
+                                // println!("{}", sender_balance);
+                                // println!("transaction value");
+                                // println!("{}", v.get_t().get_value());
+                                if !(v.get_t().get_nonce() == (1 + sender_nonce)) {
+                                    // println!("nonce correct");
+                                    // new_mempool.insert(v.hash(), &v);
+                                    // new_mempool_another.insert(v.hash(), &v);
+                                    to_remove.insert(v.hash(), &v);
                                 }
                                 
                             }
+                            else {
+                                to_remove.insert(v.hash(), &v);
+                            }
                         }
+                        else {
+                            to_remove.insert(v.hash(), &v);
+                        }
+                    }
+                    else {
+                        to_remove.insert(v.hash(), &v);
                     }
                 }
 
                 drop(mempool_copy);
 
-                println!("new mempool empty?");
-                println!("{}", new_mempool.get_mempool().is_empty());
+                // println!("new mempool empty?");
+                // println!("{}", new_mempool.get_mempool().is_empty());
 
-                self.mempool = Arc::new(Mutex::new(new_mempool));
+                for (el, _v) in to_remove.get_mempool().iter() {
+                    self.mempool.lock().unwrap().remove(*el);
+                }
+
+                // self.mempool = Arc::new(Mutex::new(new_mempool));
                 
 
                 // send off finished block
@@ -341,6 +359,8 @@ impl Context {
                 parent = self.blockchain.lock().unwrap().tip();
                 // println!("after assign parent");
                 let zero_parent = H256::from([0; 32]);
+
+                // current_mempool = new_mempool_another.get_mempool();
 
                 if parent == zero_parent {
                     break;
