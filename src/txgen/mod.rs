@@ -161,17 +161,23 @@ impl Context {
 
             // FOR SENDER
             for sender in &self.accounts {
-                println!("self.accounts not empty");
+                // println!("self.accounts not empty");
                 let tip_hash = {self.blockchain.lock().unwrap().tip()};
                 let tip_block = {self.blockchain.lock().unwrap().get_parent_block(tip_hash)};
                 let state = tip_block.get_state();
-                println!("state empty?");
-                println!("{}", state.get_state().is_empty());
+                //println!("state empty?");
+                // println!("{}", state.get_state().is_empty());
+
+                // println!("state contains initial key pair?");
+                // println!("{}", state.get_state().contains_key(&Address::from_public_key_bytes(self.accounts[0].public_key().as_ref())));
 
                 let sender_address = Address::from_public_key_bytes(sender.public_key().as_ref());
 
+                // println!("state contains sender_address?");
+                // println!("{}", state.contains_key(sender_address));
+
                 if state.contains_key(sender_address) {
-                    println!("state contains key");
+                    // println!("state contains key");
                     let mut rng = rand::thread_rng();
                 
                     let sender_nonce = state.get(sender_address.clone()).0;
@@ -180,9 +186,12 @@ impl Context {
                     // set value and nonce of signed transaction
                     let value: u32;
 
-                    if sender_balance > 0 {
+                    // println!("sender_balance");
+                    // println!("{}", sender_balance);
+
+                    if sender_balance > 1 {
                         if sender_balance > 10 {
-                            value = rng.gen_range(1..10);
+                            value = rng.gen_range(1..sender_balance / 10);
                         }
                         else {
                             value = rng.gen_range(1..sender_balance);
@@ -206,11 +215,13 @@ impl Context {
                     let sig = transaction::sign(&transaction, &sender).as_ref().to_vec();
                     let signed_transaction = SignedTransaction::new(transaction, sig, sender.public_key().as_ref().to_vec());
                     
-                    println!("transaction generated in txgen mod");
+                    // println!("transaction generated in txgen mod");
             
                     self.finished_transaction_chan.send(signed_transaction.clone()).expect("Send finished block error");
                     // put into mempool
                     {self.mempool.lock().unwrap().insert(signed_transaction.hash(), &signed_transaction)};
+
+                    // println!("after insert into mempool");
                 }
                 
                 
