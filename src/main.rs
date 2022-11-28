@@ -49,17 +49,17 @@ fn main() {
         });
 
     // generate keys for each node
-    let mut key_pair = Ed25519KeyPair::from_seed_unchecked(&[0; 32]).unwrap(); // seed is 0 for 6000
-    let mut key_pair_clone = Ed25519KeyPair::from_seed_unchecked(&[0; 32]).unwrap();
+    let key_pair = Ed25519KeyPair::from_seed_unchecked(&[0; 32]).unwrap(); // seed is 0 for 6000
+    let key_pair_clone = Ed25519KeyPair::from_seed_unchecked(&[0; 32]).unwrap();
 
-    if p2p_addr == "127.0.0.1:6001".parse::<net::SocketAddr>().unwrap() {
-        key_pair = Ed25519KeyPair::from_seed_unchecked(&[1; 32]).unwrap(); // seed is 1 for 6001
-        key_pair_clone = Ed25519KeyPair::from_seed_unchecked(&[1; 32]).unwrap();
-    }
-    else if p2p_addr == "127.0.0.1:6002".parse::<net::SocketAddr>().unwrap() {
-        key_pair = Ed25519KeyPair::from_seed_unchecked(&[2; 32]).unwrap(); // seed is 2 for 6002
-        key_pair_clone = Ed25519KeyPair::from_seed_unchecked(&[1; 32]).unwrap();
-    }
+    // if p2p_addr == "127.0.0.1:6001".parse::<net::SocketAddr>().unwrap() {
+    //     key_pair = Ed25519KeyPair::from_seed_unchecked(&[1; 32]).unwrap(); // seed is 1 for 6001
+    //     key_pair_clone = Ed25519KeyPair::from_seed_unchecked(&[1; 32]).unwrap();
+    // }
+    // else if p2p_addr == "127.0.0.1:6002".parse::<net::SocketAddr>().unwrap() {
+    //     key_pair = Ed25519KeyPair::from_seed_unchecked(&[2; 32]).unwrap(); // seed is 2 for 6002
+    //     key_pair_clone = Ed25519KeyPair::from_seed_unchecked(&[1; 32]).unwrap();
+    // }
 
     let blockchain = Arc::new(Mutex::new(Blockchain::new(key_pair)));
     let mempool = Arc::new(Mutex::new(Mempool::new()));
