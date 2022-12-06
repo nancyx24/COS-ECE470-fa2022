@@ -230,7 +230,7 @@ impl Context {
             // END OF MY CODE
             if let OperatingState::Run(i) = self.operating_state {
                 if i != 0 {
-                    let interval = Duration::from_micros(i * 3000 as u64);
+                    let interval = Duration::from_micros(i * 1000 as u64);
                     thread::sleep(interval);
                 }
             }
