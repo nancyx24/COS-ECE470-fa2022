@@ -200,7 +200,7 @@ impl Context {
                 // println!("{}", current_mempool.get_mempool().is_empty());
 
                 for (_k, v) in current_mempool.get_mempool().iter() {
-                    if count < 10 { // LIMIT
+                    if count < 5 { // LIMIT
                         new_block.insert_transaction(v.clone());
                         // println!("{}", v.hash());
                         // println!("^^hash");
