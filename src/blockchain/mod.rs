@@ -71,7 +71,7 @@ impl Blockchain {
         // create genesis block
         let zeros: [u8; 32] = [0; 32];
         let parent: H256 = H256::from(zeros); // total 64
-        let difficulty = hex_literal::hex!("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into();
+        let difficulty = hex_literal::hex!("0002ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into();
         // hex_literal::hex!("00000effffffffffffffffffffffffffffffffffffffffffffffffffffffffff").into(); // five 0s and all fs
         // H256::from([1u8; 32])
         let timestamp = 0;
