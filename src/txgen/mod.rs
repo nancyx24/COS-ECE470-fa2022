@@ -190,12 +190,12 @@ impl Context {
                     // println!("{}", sender_balance);
 
                     if sender_balance > 1 {
-                        if sender_balance > 10 {
+                        if sender_balance > 20 {
                             value = rng.gen_range(1..sender_balance / 10);
                         }
                         else {
                             value = rng.gen_range(1..sender_balance);
-                        }
+                        } 
                     }
                     else {
                         value = 0;
