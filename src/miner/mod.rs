@@ -298,28 +298,35 @@ impl Context {
 
                     let public_key = v.get_public_key();
                     let sender = Address::from_public_key_bytes(public_key.as_slice());
-                    let sender_balance = current_state.get(sender).1;
-                    let sender_nonce = current_state.get(sender).0;
-
-                    // implement checks
-                    let transaction_verified = transaction::verify(&v.get_t(), &v.get_public_key(), &v.get_sig());
-                    // println!("transaction verified");
-                    if transaction_verified {
-                        // spending check
-                        if new_block.get_state().contains_key(sender) {
-                            // println!("contains sender");
-                            if sender_balance >= v.get_t().get_value() {
-                                // println!("sender balance");
-                                // println!("{}", sender_balance);
-                                // println!("transaction value");
-                                // println!("{}", v.get_t().get_value());
-                                if !(v.get_t().get_nonce() == (1 + sender_nonce)) {
-                                    // println!("nonce correct");
-                                    // new_mempool.insert(v.hash(), &v);
-                                    // new_mempool_another.insert(v.hash(), &v);
+                    // println!("state contains sender?");
+                    // println!("{}", current_state.contains_key(sender));
+                    if current_state.contains_key(sender) {
+                        let sender_balance = current_state.get(sender).1;
+                        let sender_nonce = current_state.get(sender).0;
+    
+                        // implement checks
+                        let transaction_verified = transaction::verify(&v.get_t(), &v.get_public_key(), &v.get_sig());
+                        // println!("transaction verified");
+                        if transaction_verified {
+                            // spending check
+                            if new_block.get_state().contains_key(sender) {
+                                // println!("contains sender");
+                                if sender_balance >= v.get_t().get_value() {
+                                    // println!("sender balance");
+                                    // println!("{}", sender_balance);
+                                    // println!("transaction value");
+                                    // println!("{}", v.get_t().get_value());
+                                    if !(v.get_t().get_nonce() == (1 + sender_nonce)) {
+                                        // println!("nonce correct");
+                                        // new_mempool.insert(v.hash(), &v);
+                                        // new_mempool_another.insert(v.hash(), &v);
+                                        to_remove.insert(v.hash(), &v);
+                                    }
+                                    
+                                }
+                                else {
                                     to_remove.insert(v.hash(), &v);
                                 }
-                                
                             }
                             else {
                                 to_remove.insert(v.hash(), &v);
@@ -328,9 +335,6 @@ impl Context {
                         else {
                             to_remove.insert(v.hash(), &v);
                         }
-                    }
-                    else {
-                        to_remove.insert(v.hash(), &v);
                     }
                 }
 
